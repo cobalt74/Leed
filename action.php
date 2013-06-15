@@ -9,61 +9,134 @@
 if(!ini_get('safe_mode')) @set_time_limit(0);
 require_once("common.php");
 
+///@TODO: déplacer dans common.php?
+$commandLine = 'cli'==php_sapi_name();
 
+if ($commandLine) {
+	$action = 'commandLine';
+} else {
+	$action = @$_['action'];
+}
+///@TODO: pourquoi ne pas refuser l'accès dès le début ?
+Plugin::callHook("action_pre_case", array(&$_,$myUser));
 
 //Execution du code en fonction de l'action
-switch ($_['action']){
-
+switch ($action){
+	case 'commandLine':
 	case 'synchronize':
-		if (ob_get_level() == 0) ob_start();
 		require_once("SimplePie.class.php");
+		$syncCode = $configurationManager->get('synchronisationCode');
+		if (   false==$myUser
+			&& !$commandLine
+			&& !(isset($_['code'])
+				&& $configurationManager->get('synchronisationCode')!=null
+				&& $_['code']==$configurationManager->get('synchronisationCode')
+			)
+		) {
+			die('Vous devez vous connecter pour cette action.');
+		}
+		Functions::triggerDirectOutput();
 
-		
-		echo '<link rel="stylesheet" href="templates/marigolds/css/style.css"><ul style="font-family:Verdana;">';
-		echo str_pad('',4096)."\n";ob_flush();flush();
-
-		if (isset($_['code']) && $configurationManager->get('synchronisationCode')!=null && $_['code'] == $configurationManager->get('synchronisationCode')){
-
+		if (!$commandLine)
+			echo '<html>
+				<head>
+				<link rel="stylesheet" href="./templates/'.DEFAULT_THEME.'/css/style.css">
+				</head>
+				<body>
+				<div class="sync">';
 		$synchronisationType = $configurationManager->get('synchronisationType');
 		$maxEvents = $configurationManager->get('feedMaxEvents');
+		if('graduate'==$synchronisationType){
+			// sélectionne les 10 plus vieux flux
+			$feeds = $feedManager->loadAll(null,'lastupdate',defined('SYNC_GRAD_COUNT') ? SYNC_GRAD_COUNT : 10);
+			$syncTypeStr = 'Type de synchronisation : Synchronisation graduée…';
+		}else{
+			// sélectionne tous les flux, triés par le nom
+			$feeds = $feedManager->populate('name');
+			$syncTypeStr = 'Type de synchronisation : Synchronisation complète…';
+		}
 
 		
-
-			echo '<h3>Synchronisation du '.date('d/m/Y H:i:s').'</h3>';
-			echo '<hr/>';
-			echo str_pad('',4096)."\n";ob_flush();flush();
-
-		if($synchronisationType=='graduate'){
-			$feeds = $feedManager->loadAll(null,'lastupdate','10');
-			echo 'Type gradué...<br/>';
-			echo str_pad('',4096)."\n";ob_flush();flush();
-		}else{
-			$feeds = $feedManager->populate('name');
-			echo 'Type complet...<br/>';
-			echo str_pad('',4096)."\n";ob_flush();flush();
-		}	
-			
-			echo count($feeds).' Flux à synchroniser...<br/>';
-			echo str_pad('',4096)."\n";ob_flush();flush();
-		foreach ($feeds as $feed) {
-			echo date('H:i:s').' - Flux '.$feed->getName().' ('.$feed->getUrl().') parsage des flux...<br/>';
-			echo str_pad('',4096)."\n";ob_flush();flush();
-			$feed->parse();
-			echo str_pad('',4096)."\n";ob_flush();flush();
-			echo date('H:i:s').' - Flux '.$feed->getName().' ('.$feed->getUrl().') supression des vieux evenements...<br/>';
-			echo str_pad('',4096)."\n";ob_flush();flush();
-			if($maxEvents!=0) $feed->removeOldEvents($maxEvents);
-			echo date('H:i:s').' - Flux '.$feed->getName().' ('.$feed->getUrl().') terminé<br/>';
-			echo str_pad('',4096)."\n";ob_flush();flush();
+		$currentDate = date('d/m/Y H:i:s');
+		if (!$commandLine) {
+			echo "<p>{$syncTypeStr} {$currentDate}</p>\n";
+			echo "<dl>\n";
+		} else {
+			echo "{$syncTypeStr}\t{$currentDate}\n";
 		}
-			echo date('H:i:s').' - Synchronisation terminée ( '.number_format(microtime(true)-$start,3).' secondes )<br/>';
-		echo str_pad('',4096)."\n";ob_flush();flush();
+		$nbErrors = 0;
+		$nbOk = 0;
+		$nbTotal = 0;
+		$localTotal = 0; // somme de tous les temps locaux, pour chaque flux
+		$syncId = time();
+		$enableCache = ($configurationManager->get('synchronisationEnableCache')=='')?0:$configurationManager->get('synchronisationEnableCache');
+		$forceFeed = ($configurationManager->get('synchronisationForceFeed')=='')?0:$configurationManager->get('synchronisationForceFeed');
+		foreach ($feeds as $feed) {
+			$nbTotal++;
+			$startLocal = microtime(true);
+			$parseOk = $feed->parse($syncId, $enableCache, $forceFeed);
+			$parseTime = microtime(true)-$startLocal;
+			$localTotal += $parseTime;
+			$parseTimeStr = number_format($parseTime, 3);
+			if ($parseOk) { // It's ok
+				$errors = array();
 
-	}else{
-		echo 'Code de synchronisation incorrect ou non spécifié';
-	}
+				$nbOk++;
+			} else {
+				// tableau au cas où il arrive plusieurs erreurs
+				$errors = array($feed->getError());
 
-		ob_end_flush();
+				$nbErrors++;
+			}
+			$feedName = Functions::truncate($feed->getName(),30);
+			$feedUrl = $feed->getUrl();
+			$feedUrlTxt = Functions::truncate($feedUrl, 30);
+			if ($commandLine) {
+				echo date('d/m/Y H:i:s')."\t".$parseTimeStr."\t";
+				echo "{$feedName}\t{$feedUrlTxt}\n";
+			} else {
+
+				if (!$parseOk) echo '<div class="errorSync">';
+				echo "<dt><i>{$parseTimeStr}s</i> | <a href='{$feedUrl}'>{$feedName}</a></dt>\n";
+				
+			}
+			foreach($errors as $error) {
+				if ($commandLine)
+					echo "$error\n";
+				else
+					echo "<dd>$error</dd>\n";
+			}
+			if (!$parseOk) echo '</div>';
+// 			if ($commandLine) echo "\n";
+			$feed->removeOldEvents($maxEvents, $syncId);
+		}
+		assert('$nbTotal==$nbOk+$nbErrors');
+		$totalTime = microtime(true)-$start;
+		assert('$totalTime>=$localTotal');
+		$totalTimeStr = number_format($totalTime, 3);
+		$currentDate = date('d/m/Y H:i:s');
+		if ($commandLine) {
+			echo "\t{$nbErrors}\terreur(s)\n";
+			echo "\t{$nbOk}\tbon(s)\n";
+			echo "\t{$nbTotal}\tau total\n";
+			echo "\t$currentDate\n";
+			echo "\t{$totalTimeStr}\tseconde(s)\n";
+		} else {
+			echo "</dl>\n";
+			echo "<div id='syncSummary'\n";
+			echo "<p>Synchronisation terminée.</p>\n";
+			echo "<ul>\n";
+			echo "<li>{$nbErrors} erreur(s)\n";
+			echo "<li>{$nbOk} bon(s)\n";
+			echo "<li>{$nbTotal} au total\n";
+			echo "<li>{$totalTimeStr}\tseconde(s)\n";
+			echo "</ul>\n";
+			echo "</div>\n";
+		}
+
+		if (!$commandLine) {
+			echo '</div></body></html>';
+		}
 
 	break;
 
@@ -93,7 +166,6 @@ switch ($_['action']){
 	case 'updateConfiguration':
 		if($myUser==false) exit('Vous devez vous connecter pour cette action.');
 
-
 			//Ajout des préférences et réglages
 			$configurationManager->put('root',(substr($_['root'], strlen($_['root'])-1)=='/'?$_['root']:$_['root'].'/'));
 			//$configurationManager->put('view',$_['view']);
@@ -104,20 +176,18 @@ switch ($_['action']){
 			$configurationManager->put('articlePerPages',$_['articlePerPages']);
 			$configurationManager->put('articleDisplayLink',$_['articleDisplayLink']);
 			$configurationManager->put('articleDisplayDate',$_['articleDisplayDate']);
-			$configurationManager->put('articleDisplayAuthor',$_['articleDisplayAuthor']);
-			$configurationManager->put('plugin_shaarli',(isset($_['plugin_shaarli']) && $_['plugin_shaarli']=='on'?1:0));
-			$configurationManager->put('plugin_shaarli_link',$_['plugin_shaarli_link']);
+			$configurationManager->put('articleDisplayAuthor',$_['articleDisplayAuthor']);			
+			$configurationManager->put('articleDisplayHomeSort',$_['articleDisplayHomeSort']);
+			$configurationManager->put('articleDisplayFolderSort',$_['articleDisplayFolderSort']);
 			$configurationManager->put('synchronisationType',$_['synchronisationType']);
+			$configurationManager->put('synchronisationEnableCache',$_['synchronisationEnableCache']);
+			$configurationManager->put('synchronisationForceFeed',$_['synchronisationForceFeed']);
 			$configurationManager->put('feedMaxEvents',$_['feedMaxEvents']);
 
-	
-		
-			 $userManager->change(array('login'=>$_['login']),array('id'=>$myUser->getId()));
-			 if(trim($_['password'])!='') $userManager->change(array('password'=>User::encrypt($_['password'])),array('id'=>$myUser->getId()));
-		
+			$userManager->change(array('login'=>$_['login']),array('id'=>$myUser->getId()));
+			if(trim($_['password'])!='') $userManager->change(array('password'=>User::encrypt($_['password'])),array('id'=>$myUser->getId()));
 
-
-	header('location: ./settings.php');
+	header('location: ./settings.php#preferenceBloc');
 	break;
 
 
@@ -163,9 +233,14 @@ switch ($_['action']){
 
 	case 'importForm':
 		if($myUser==false) exit('Vous devez vous connecter pour cette action.');
-		echo '<link rel="stylesheet" href="templates/marigolds/css/style.css"><form action="action.php?action=importFeed" method="POST" enctype="multipart/form-data"><h2>Importer les flux au format opml</h2>
+		echo '<html style="height:auto;"><link rel="stylesheet" href="templates/marigolds/css/style.css">
+				<body style="height:auto;">
+					<form action="action.php?action=importFeed" method="POST" enctype="multipart/form-data">
 					<p>Fichier OPML : <input name="newImport" type="file"/> <button name="importButton">Importer</button></p>
-					<p>Nb : L\'importation peux prendre un certain temps, laissez votre navigateur tourner et allez vous prendre un café :).</p></form>
+					<p>Nb : L\'importation peux prendre un certain temps, laissez votre navigateur tourner et allez vous prendre un café :).</p>
+					</form>
+				</body>
+			</html>
 				
 			';
 	break;
@@ -173,7 +248,7 @@ switch ($_['action']){
 	case 'synchronizeForm':
 	 if(isset($myUser) && $myUser!=false){  
 		echo '<link rel="stylesheet" href="templates/marigolds/css/style.css">
-				<a class="button" href="action.php?action=synchronize&format=html&code='.$configurationManager->get('synchronisationCode').'">Synchroniser maintenant</a>
+				<a class="button" href="action.php?action=synchronize">Synchroniser maintenant</a>
 					<p>Nb : La synchronisation peux prendre un certain temps, laissez votre navigateur tourner et allez vous prendre un café :).</p>
 				
 			';
@@ -189,67 +264,85 @@ switch ($_['action']){
 	break;
 
 	case 'importFeed':
-		echo "
+		// On ne devrait pas mettre de style ici.
+		echo "<html>
 			<style>
 				a {
 					color:#F16529;
 				}
-			</style>
+
+				html,body{
+						font-family:Verdana;
+						font-size: 11px;
+				}
+				.error{
+						background-color:#C94141;
+						color:#ffffff;
+						padding:5px;
+						border-radius:5px;
+						margin:10px 0px 10px 0px;
+						box-shadow: 0 0 3px 0 #810000;
+					}
+				.error a{
+						color:#ffffff;
+				}
+				</style>
+			</style><body>
 \n";
 		if($myUser==false) exit('Vous devez vous connecter pour cette action.');
 		if(!isset($_POST['importButton'])) break;
 		$opml = new Opml();
 		echo "<h3>Importation</h3><p>En cours...</p>\n";
-		$errorOutput = $opml->import($_FILES['newImport']['tmp_name']);
+		try {
+			$errorOutput = $opml->import($_FILES['newImport']['tmp_name']);
+		} catch (Exception $e) {
+			$errorOutput = array($e->getMessage());
+		}
 		if (empty($errorOutput)) {
-			echo "<p style='color:blue'>L'import s'est déroulé sans problème.</p>\n";
+			echo "<p>L'import s'est déroulé sans problème.</p>\n";
 		} else {
-			echo "<p style='color:red'>Erreurs à l'importation!</p>\n";
+			echo "<div class='error'>Erreurs à l'importation!\n";
 			foreach($errorOutput as $line) {
 				echo "<p>$line</p>\n";
 			}
+			echo "</div>";
 		}
 		if (!empty($opml->alreadyKnowns)) {
 			echo "<h3>Certains flux étaient déjà connus, ils n'ont pas été "
 				."réimportés&nbsp;:</h3>\n<ul>\n";
 			foreach($opml->alreadyKnowns as $alreadyKnown) {
 				foreach($alreadyKnown as &$elt) $elt = htmlspecialchars($elt);
-				$maxLength = 80;
-				$delimiter = '...';
-				if (strlen($alreadyKnown->description)>$maxLength) {
-					$alreadyKnown->description =
-						substr($alreadyKnown->description, 0,
-							$maxLength-strlen($delimiter)
-						).$delimiter;
-				}
+				$text = Functions::truncate($alreadyKnown->feedName, 60);
 				echo "<li><a target='_parent' href='{$alreadyKnown->xmlUrl}'>"
-					."{$alreadyKnown->description}</a></li>\n";
+					."{$text}</a></li>\n";
 			}
 			echo "</ul>\n";
 		}
-		$syncCode = $configurationManager->get('synchronisationCode');
-		assert('!empty($syncCode)');
-		$syncLink = "action.php?action=synchronize&format=html&code=$syncCode";
+		$syncLink = "action.php?action=synchronize&format=html";
 		echo "<p>";
 		echo "<a href='$syncLink' style='text-decoration:none;font-size:3em'>"
 			."↺</a>";
 		echo "<a href='$syncLink'>Cliquez ici pour synchroniser vos flux importés.</a>";
-		echo "<p>\n";
+		echo "<p></body></html>\n";
 	break;
 
 	
 	case 'addFeed':
-			require_once("SimplePie.class.php");
 			if($myUser==false) exit('Vous devez vous connecter pour cette action.');
-			if(isset($_['newUrl'])){
-				$newFeed = new Feed();
-				$newFeed->setUrl($_['newUrl']);
+			require_once("SimplePie.class.php");
+			if(!isset($_['newUrl'])) break;
+			$newFeed = new Feed();
+			$newFeed->setUrl(Functions::clean_url($_['newUrl']));
+			if ($newFeed->notRegistered()) {
+				///@TODO: avertir l'utilisateur du doublon non ajouté
 				$newFeed->getInfos();
-				$newFeed->setFolder((isset($_['newUrlCategory'])?$_['newUrlCategory']:1));
+				$newFeed->setFolder(
+					(isset($_['newUrlCategory'])?$_['newUrlCategory']:1)
+				);
 				$newFeed->save();
-				$newFeed->parse();
-				header('location: ./settings.php#defaultFolder');
+				$newFeed->parse(true);
 			}
+ 			header('location: ./settings.php#manageBloc');
 	break;
 
 	case 'changeFeedFolder':
@@ -295,7 +388,7 @@ switch ($_['action']){
 	case 'renameFeed':
 		if($myUser==false) exit('Vous devez vous connecter pour cette action.');
 		if(isset($_['id'])){
-			$feedManager->change(array('name'=>$_['name']),array('id'=>$_['id']));
+			$feedManager->change(array('name'=>$_['name'],'url'=>Functions::clean_url($_['url'])),array('id'=>$_['id']));
 		}
 	break;
 
@@ -310,8 +403,10 @@ switch ($_['action']){
 	break;
 
 	case 'readContent':
-		$event = $eventManager->load(array('id'=>$_['id']));
-		if($myUser!=false) $eventManager->change(array('unread'=>'0'),array('id'=>$_['id']));
+		if(isset($_['id'])){
+			$event = $eventManager->load(array('id'=>$_['id']));
+			if($myUser!=false) $eventManager->change(array('unread'=>'0'),array('id'=>$_['id']));
+		}
 	break;
 
 	case 'unreadContent':
@@ -353,6 +448,19 @@ switch ($_['action']){
 	
 	break;
 
+	case 'changePluginState':
+		if($myUser==false) exit('Vous devez vous connecter pour cette action.');
+		
+		if($_['state']=='0'){
+			Plugin::enabled($_['plugin']);
+
+		}else{
+			Plugin::disabled($_['plugin']);
+		}
+		header('location: ./settings.php#pluginBloc');
+	break;
+	
+
 	
 	case 'logout':
 		$_SESSION = array();
@@ -362,7 +470,9 @@ switch ($_['action']){
 	break;
 	
 	default:
-		exit('0');
+		require_once("SimplePie.class.php");
+		Plugin::callHook("action_post_case", array(&$_,$myUser));
+		//exit('0');
 	break;
 }
 

@@ -24,7 +24,15 @@ class Event extends MysqlEntity{
 		'feed'=>'integer',
 		'unread'=>'integer',
 		'favorite'=>'integer',
-		'pubdate'=>'integer'
+		'pubdate'=>'integer',
+		'syncId'=>'integer',
+	);
+
+	protected $object_fields_index = 
+	array(
+		'feed'=>'index',
+		'unread'=>'index',
+		'favorite'=>'index'
 	);
 
 	function __construct($guid=null,$title=null,$description=null,$content=null,$pubdate=null,$link=null,$category=null,$creator=null){
@@ -43,8 +51,7 @@ class Event extends MysqlEntity{
 
 	function getEventCountPerFolder(){
 		$events = array();
-		$results = $this->customQuery('SELECT COUNT('.MYSQL_PREFIX.$this->TABLE_NAME.'.id),'.MYSQL_PREFIX.'folder.id FROM '.MYSQL_PREFIX.$this->TABLE_NAME.' INNER JOIN '.MYSQL_PREFIX.'feed ON ('.MYSQL_PREFIX.'event.feed = '.MYSQL_PREFIX.'feed.id) INNER JOIN '.MYSQL_PREFIX.'folder ON ('.MYSQL_PREFIX.'folder.id = '.MYSQL_PREFIX.'feed.folder) WHERE '.MYSQL_PREFIX.$this->TABLE_NAME.'.unread=1 GROUP BY '.MYSQL_PREFIX.'folder.id');
-		
+		$results = $this->customQuery('SELECT COUNT('.MYSQL_PREFIX.$this->TABLE_NAME.'.id),'.MYSQL_PREFIX.'feed.folder FROM '.MYSQL_PREFIX.$this->TABLE_NAME.' INNER JOIN '.MYSQL_PREFIX.'feed ON ('.MYSQL_PREFIX.'event.feed = '.MYSQL_PREFIX.'feed.id) WHERE '.MYSQL_PREFIX.$this->TABLE_NAME.'.unread=1 GROUP BY '.MYSQL_PREFIX.'feed.folder');
 		while($item = mysql_fetch_array($results)){
 			$events[$item[1]] = $item[0];
 		}
@@ -101,7 +108,7 @@ class Event extends MysqlEntity{
 	}
 
 	function setPubdate($pubdate){
-		$this->pubdate = strtotime($pubdate);
+		$this->pubdate = (is_numeric($pubdate)?$pubdate:strtotime($pubdate));
 	}
 
 	function getLink(){
@@ -141,6 +148,14 @@ class Event extends MysqlEntity{
 		$this->guid = $guid;
 	}
 
+	function getSyncId(){
+		return $this->syncId;
+	}
+
+	function setSyncId($syncId){
+		$this->syncId = $syncId;
+	}
+	
 	function getUnread(){
 		return $this->unread;
 	}

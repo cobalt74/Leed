@@ -26,14 +26,35 @@ class Opml  {
 	 * Convertit les caractères qui interfèrent avec le XML
 	 */
 	protected function escapeXml($string) {
-		return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
+		/** Les entités sont utiles pour deux raisons : encodage et
+		échappement. L'encodage n'est pas un problème, l'application travaille
+		nativement avec Unicode. L'échappement dans XML impose d'échapper les
+		esperluettes (&) et les guillemets. Ces derniers sont utilisés comme
+		séparateur de chaine. Les simples cotes restent intactes.
+		* On retire toutes les entités de sorte à obtenir une chaîne totalement
+		  en UTF-8. Elle peut alors contenir des & et des ", nocifs pour XML.
+		* On échappe les caractères & et " de sorte à ce que le contenu dans le
+		  XML soit correct. On suppose qu'à la lecture, cet échappement est
+		  annulé.
+		* Accessoirement, on remplace les espaces non signifiants par une seule
+		  espace. C'est le cas des retours chariots physiques, non
+		  interprétables.
+		*/		
+		// Retire toutes les entités, &amp; &eacute; etc.
+		$string = html_entity_decode($string, ENT_COMPAT, 'UTF-8' );
+		// Remet les entités HTML comme &amp; mais ne touche pas aux accents.
+ 		$string = htmlspecialchars($string, ENT_COMPAT, 'UTF-8');
+ 		// Supprime les blancs non signifiants comme les sauts de ligne.
+ 		$string = preg_replace('/\s+/', ' ', $string);
+		return $string;
 	}
 
 	/**
 	 * Exporte récursivement les flux.
 	 */
 	protected function exportRecursive($folders, $identLevel=0) {
-		$_ = ''; for($i=0;$i<$identLevel;$i++) $_.="\t";
+		$_ = '  ';
+		$__ = ''; for($i=0;$i<$identLevel;$i++) $__.=$_;
 		$xmlStream = '';
 		foreach($folders as $folder) {
 			// Pas utilisé, vu qu'il n'y a qu'un seul niveau de dossiers.
@@ -43,23 +64,23 @@ class Opml  {
 			$feeds = $folder->getFeeds();
 			if (empty($feeds)) continue;
 			$text = $this->escapeXml($folder->getName());
-			$title = $this->escapeXml($folder->getName());
-			$xmlStream .= "{$_}<outline text='$text' title='$title' icon=''>\n";
+			$xmlStream .= "{$__}<outline text=\"$text\">\n";
 			foreach($feeds as $feed){
 				$url = $this->escapeXml($feed->getUrl());
 				$website = $this->escapeXml($feed->getWebsite());
 				$title = $this->escapeXml($feed->getName());
 				$text = $title;
 				$description = $this->escapeXml($feed->getDescription());
-				$xmlStream .= "{$_}{$_}<outline "
-				."xmlUrl='$url' "
-				."htmlUrl='$website' "
-				."text='$text' "
-				."title='$title' "
-				."description='$description' "
-				." />\n";
+				$xmlStream .= "{$__}{$_}<outline "
+				."type=\"rss\" "
+				."xmlUrl=\"$url\" "
+				."htmlUrl=\"$website\" "
+				."text=\"$text\" "
+				."title=\"$title\" "
+				."description=\"$description\""
+				."/>\n";
 			}
-			$xmlStream .= "{$_}</outline>\n";
+			$xmlStream .= "{$__}</outline>\n";
 		}
 		return $xmlStream;
 	}
@@ -70,17 +91,17 @@ class Opml  {
 	function export() {
 		$this->update();
 		$date = date('D, d M Y H:i:s O');
-		$xmlStream = "<?xml version='1.0' encoding='utf-8'?>
-<opml version='2.0'>
-	<head>
-		<title>Leed export</title>
-		<ownerName>Leed</ownerName>
-		<ownerEmail>idleman@idleman.fr</ownerEmail>
-		<dateCreated>$date</dateCreated>
-	</head>
-	<body>\n";
+		$xmlStream = "<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<opml version=\"2.0\">
+  <head>
+    <title>Leed export</title>
+    <ownerName>Leed</ownerName>
+    <ownerEmail>idleman@idleman.fr</ownerEmail>
+    <dateCreated>$date</dateCreated>
+  </head>
+  <body>\n";
 		$xmlStream .= $this->exportRecursive($this->folders, 2);
-		$xmlStream .= "\t</body>\n</opml>\n";
+		$xmlStream .= "  </body>\n</opml>\n";
 		return $xmlStream;
 	}
 
@@ -113,8 +134,9 @@ class Opml  {
 					// $newFeed->parse();
 				} else {
 					$this->alreadyKnowns[]= (object) array(
-						'description' => $item[0]['description'],
-						'xmlUrl' => $item[0]['xmlUrl']
+						'description' => $newFeed->getDescription(),
+						'feedName' => $newFeed->getName(),
+						'xmlUrl' => $newFeed->getUrl()
 					);
 				}
 			}

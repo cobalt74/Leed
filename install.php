@@ -6,6 +6,10 @@
  @description:  Page d'installation du script (a supprimer après installation)
  */
 
+if (file_exists('constant.php')) {
+	die('Leed est déjà configuré. Supprimez ou renommez le fichier de configuration.');
+}
+
 session_start(); 
 require_once('Functions.class.php');
 $_ = array_merge($_GET, $_POST);
@@ -39,10 +43,16 @@ foreach($_ as $key=>&$val){
 	<meta name="viewport" content="width=device-width">
 
 	<link rel="stylesheet" href="templates/marigolds/css/style.css">
-
+	<style>
+		code {
+			color:#000;
+			font-size: 1em;
+		}
+	</style>
 	<script src="templates/marigolds/js/libs/jqueryAndModernizr.min.js"></script>
 </head>
 <body>
+<div class="global-wrapper">
 	<div id="header-container">
 		<header class="wrapper clearfix">
 			<h1 class="logo" id="title"><a href="./index.php">L<i>eed</i></a></h1>
@@ -66,10 +76,23 @@ foreach($_ as $key=>&$val){
 
 if(isset($_['installButton'])){
 
+	if (!Functions::testDb(
+		$_['mysqlHost'], $_['mysqlLogin'], $_['mysqlMdp'], $_['mysqlBase']
+	)) {
+		///@TODO: faire un retour plus intelligible + tests dans le common.php
+		echo "<p>Connexion à la base de donnnées impossible :</p>";
+		echo "<ul>\n";
+		echo "<li>host: {$_['mysqlHost']}\n";
+		echo "<li>login: {$_['mysqlLogin']}\n";
+		echo "<li>password: {$_['mysqlMdp']}\n";
+		echo "<li>database: {$_['mysqlBase']}\n";
+		echo "</ul><p><a href=''>Relancer l'installation</a></p>\n";
+		die();
+	}
 
 	$constant = "<?php
-	define('VERSION_NUMBER','1.1');
-	define('VERSION_NAME','Beta (rev 89)');
+	define('VERSION_NUMBER','1.5');
+	define('VERSION_NAME','Beta');
 
 	//Host de Mysql, le plus souvent localhost ou 127.0.0.1
 	define('MYSQL_HOST','".$_['mysqlHost']."'); 
@@ -85,6 +108,8 @@ if(isset($_['installButton'])){
 	define('DEFAULT_THEME','marigolds');
 	//Nombre de pages affichées dans la barre de pagination
 	define('PAGINATION_SCALE',5);
+	//Nombre de flux mis à jour lors de la synchronisation graduée
+	define('SYNC_GRAD_COUNT',10);	
 	?>";
 
 	file_put_contents('constant.php', $constant);
@@ -97,7 +122,7 @@ if(isset($_['installButton'])){
 	require_once('User.class.php');
 	require_once('Folder.class.php');
 	require_once('Configuration.class.php');
-	$myUser = (isset($_SESSION['currentUser'])?unserialize($_SESSION['currentUser']):false);
+
 	$feedManager = new Feed();
 	$eventManager = new Event();
 	$userManager = new User();
@@ -130,12 +155,14 @@ if(isset($_['installButton'])){
 	$configurationManager->add('articleDisplayLink',$_['articleDisplayLink']);
 	$configurationManager->add('articleDisplayDate',$_['articleDisplayDate']);
 	$configurationManager->add('articleDisplayAuthor',$_['articleDisplayAuthor']);
-	$configurationManager->add('plugin_shaarli',(isset($_['plugin_shaarli']) && $_['plugin_shaarli']=='on'?1:0));
-	$configurationManager->add('plugin_shaarli_link',$_['plugin_shaarli_link']);
+	$configurationManager->add('articleDisplayHomeSort',$_['articleDisplayHomeSort']);
+	$configurationManager->add('articleDisplayFolderSort',$_['articleDisplayFolderSort']);
 	$configurationManager->add('synchronisationType',$_['synchronisationType']);
 	$configurationManager->add('feedMaxEvents',$_['feedMaxEvents']);
 	
 	$configurationManager->add('synchronisationCode',$synchronisationCode);
+	$configurationManager->add('synchronisationEnableCache',$_['synchronisationEnableCache']);
+	$configurationManager->add('synchronisationForceFeed',$_['synchronisationForceFeed']);
 
 	//Création du dossier de base
 	$folder = $folderManager->load(array('id'=>1));
@@ -144,42 +171,37 @@ if(isset($_['installButton'])){
 	$folder->setParent(-1);
 	$folder->setIsopen(1);
 	$folder->save();
-	
-
+	$dirname = dirname(__FILE__);
+	$logFile = str_replace(array(basename(__FILE__),'\\'),array('logs/cron.log','/'),__FILE__);
+	$wgetUrl = "{$root}action.php?action=synchronize&code={$synchronisationCode}";
 ?>
 
 	 <article style="width:100%;">
-				<header>
-					<h1>Installation de Leed terminée</h1>
-					<p>L'installation de Leed est terminée!!</p>
+		<h2>Mises à jour automatiques</h2>
 
-					
-					
-					<?php if ($_['synchronisationType']=='auto'){ ?>
-					<p>N'oubliez pas de mettre en place le CRON adapté pour que vos flux se mettent à jour, exemple :</p>
-					<code>sudo crontab -e</code>
-					<p>Dans le fichier qui s'ouvre ajoutez la ligne :</p>
-					<code>0 * * * * wget -q -O <?php echo (str_replace(array(basename(__FILE__),'\\'),array('logs/cron.log','/'),__FILE__)); ?> "<?php echo $root ?>action.php?action=synchronize&code=<?php echo $synchronisationCode; ?>"	#Commande de mise a jour de leed</code>
-					<p>Quittez et sauvegardez le fichier.</p>
-					<p>Cet exemple mettra à jour vos flux toutes les heures et ajoutera le rapport de mise a jour sous le nom "logsCron" dans votre dossier leed</p>
-	 				
-					<?php }else if ($_['synchronisationType']=='graduate'){ ?>
-					<p>N'oubliez pas de mettre en place le CRON adapté pour que vos flux se mettent à jour, exemple :</p>
-					<code>sudo crontab -e</code>
-					<p>Dans le fichier qui s'ouvre ajoutez la ligne :</p>
-					<code>0,5,10,15,20,25,30,35,40,45,50,55 * * * * wget -q -O <?php echo (str_replace(array(basename(__FILE__),'\\'),array('logs/cron.log','/'),__FILE__)); ?> "<?php echo $root ?>action.php?action=synchronize&code=<?php echo $synchronisationCode; ?>"	#Commande de mise a jour de leed</code>
-					<p>Quittez et sauvegardez le fichier.</p>
-					<p>Cet exemple mettra à jour vos flux toutes les 5 minutes(conseillé pour une synchronisation graduée) et ajoutera le rapport de mise a jour sous le nom "logsCron" dans votre dossier leed</p>
-	 				
+		<h3>Appel direct</h3>
+<p>Cette méthode requiert un accès local. Elle permet de lancer directement la synchronisation. Elle devrait être préférée lorsqu'on dispose d'un accès direct à la ligne de commande de l'hébergement.</p>
 
-					<?php }  ?>
+<code>0 * * * * cd <?php echo $dirname ?> &amp;&amp; php action.php >> logs/cron.log 2>&1</code>
 
-					<p><h3>Important ! </h3>N'oubliez pas de supprimer la <b>page install.php</b> par mesure de sécurité</p>
-	 				<p>Cliquez <a style="color:#F16529;" href="index.php">ici</a> pour acceder au script</p>
+		<h3>Appel réseau</h3>
+<p>Cette méthode nécessite l'accès à Leed en http via la commande <em>wget</em>, par exemple. Cette méthode a l'avantage de pouvoir être déclenchée à distance et sans accès à la ligne de commande. Afin de contrôler l'accès, il est nécessaire de fournir le code de synchronisation qui est disponible dans la configuration :</p>
+
+<code>0 * * * * wget --no-check-certificate --quiet --output-document
+<?php echo $logFile." '".$wgetUrl."'" ?>
+</code>
+
+Si vous n'avez pas accès a la commande wget sur votre serveur, vous pouvez essayer son chemin complet <em>/usr/bin/wget</em>.
+
+		<h3>Planification</h3>
+<p>Dans le cas d'une synchronisation complète, une synchronisation par heure suffit. Pour une synchronisation graduée, les flux sont téléchargés au fur et à mesure. Il vaut mieux lancer plus souvent les mises à jour. Par exemple, toutes les 5 minutes :</p>
+<code>*/5 * * * * wget (...)</code>
+
+		<h3>Cliquez <a style="color:#F16529" href="index.php">ici</a> pour acceder à votre Leed</h3>
 	 <?php
 }else{
 ?>
-
+<div id="menuBar">
 			<aside>
 				<h3 class="left">Verifications</h3> 
 				<ul class="clear" style="margin:0">
@@ -187,7 +209,8 @@ if(isset($_['installButton'])){
 						<?php 
 
 						if(!is_writable('./')){
-							$test['Erreur'][]='Ecriture impossible dans le repertoire Leed, veuillez ajouter les permissions en ecriture sur tous le dossier (sudo chmod 775 -R '.str_replace(basename(__FILE__),'',__FILE__).')';
+			
+							$test['Erreur'][]='Écriture impossible dans le répertoire Leed, veuillez ajouter les permissions en écriture sur tout le dossier (sudo chmod 777 -R '.str_replace(basename(__FILE__),'',__FILE__).', pensez à blinder les permissions par la suite)';
 						}else{
 							$test['Succès'][]='Permissions sur le dossier courant : OK';
 						}
@@ -226,7 +249,7 @@ if(isset($_['installButton'])){
 						<?php } ?>
 				</ul>
 			</aside>
-
+</div>
 	<?php  if(!isset($test['Erreur'])){ ?>		
 	<form action="install.php" method="POST">
 			<article>
@@ -262,16 +285,32 @@ if(isset($_['installButton'])){
 
 				<section>
 					<h2>Synchronisation</h2>
-					<p><input type="radio" checked="checked" value="auto" name="synchronisationType"> <strong>Automatique (complet) :</strong> Le script mettra à jour automatiquement tous vos flux en une seule fois, ceci permet la mise à jour en une foix de tous vos flux mais peux faire ramer votre serveur, les appels cron ne doivent pas être trop rapprochés</p>
-					<p><input type="radio"  value="graduate" name="synchronisationType"> <strong>Automatique (gradué) :</strong> Le script mettra à jour automatiquement les 10 flux les plus vieux en terme de mise à jour, ceci permet d'alléger la charge serveur et d'éviter les timeouts intempestifs mais nécessite un appel de cron plus fréquent afin de mettre à jour le plus de flux possible</p>
-					<p><input type="radio"  value="manual" name="synchronisationType"> <strong>Manuel (complet) :</strong> Le script ne fait aucune mise à jour automatique, vous devez faire vous même les mises à jour depuis l'espace administration.</p>
+					<p><input type="radio" checked="checked" value="auto" name="synchronisationType"> <strong>Automatique (complet) :</strong> Le script mettra à jour automatiquement tous vos flux en une seule fois, ceci permet la mise à jour en une fois de tous vos flux mais peux faire ramer votre serveur, les appels cron ne doivent pas être trop rapprochés.</p>
+					<p><input type="radio"  value="graduate" name="synchronisationType"> <strong>Automatique (gradué) : </strong>Le script mettra à jour automatiquement les 10 flux les plus vieux en terme de mise à jour, ceci permet d'alléger la charge serveur et d'éviter les timeouts intempestifs mais nécessite un appel de cron plus fréquent afin de mettre à jour le plus de flux possible.</p>
+					<p><input type="radio"  value="manual" name="synchronisationType"> <strong>Manuel (complet) : </strong>Le script ne fait aucune mise à jour automatique, vous devez faire vous même les mises à jour depuis l'espace administration.</p>
+					<p><strong>Options de synchronisation</strong>
+						<fieldset>
+							<legend>Activer le Cache</legend>
+							<input type="radio" checked="checked" value="1" name="synchronisationEnableCache" /><label for="synchronisationEnableCacheYes">Oui</label>
+							<input type="radio" value="0" name="synchronisationEnableCache" /><label for="synchronisationEnableCacheNo">Non</label>
+							<p>Cette option vous permet de désactiver la mise en cache. Cependant, la désactivation du cache peut entraîner des temps de chargement plus longs.</p>
+						</fieldset>
+						<fieldset>
+							<legend>Forcer l'intégration</legend>
+							<input type="radio" value="1" name="synchronisationForceFeed" /><label for="synchronisationForceFeedYes">Oui</label>
+							<input type="radio" checked="checked" value="0" name="synchronisationForceFeed" /><label for="synchronisationForceFeedNo">Non</label>
+							<p>Les flux RSS et Atom sont censés avoir des types MIME associés spécifiques afin que le logiciel sache quel type de données il s'agit. Certains flux ne suivent pas ces règles (par exemple text/plain). SimplePie suit les meilleures pratiques par défaut, mais vous pouvez forcer l'intégration avec ce paramètre.</p>
+						</fieldset>
+					</p>
 				</section>
 
 				<section>
 					<h2>Préferences</h2>
 					<p>Autoriser la lecture anonyme: <input type="radio" checked="checked" value="1" name="articleDisplayAnonymous">Oui <input type="radio" value="0" name="articleDisplayAnonymous">Non</p>
-					<h3 class="articleDetails">Nb: si vous choisissez cette option, les utilisateurs non authentifié pourront consulter vos flux (sans pouvoir les marquer comme lu/non lu)</h3>
+					<h3 class="articleDetails">Nb: si vous choisissez cette option, les utilisateurs non authentifiés pourront consulter vos flux (sans pouvoir les marquer comme lu/non lu).</h3>
 					<p>Nombre d'articles par pages: <input type="text" value="5" name="articlePerPages"></p>
+					<p>Articles les plus récents en premier (sur la page d'accueil) : <input type="radio" checked="checked" value="1" name="articleDisplayHomeSort">Oui <input type="radio" value="0" name="articleDisplayHomeSort">Non</p>
+					<p>Articles les plus récents en premier (sur les dossiers) : <input type="radio" checked="checked" value="1" name="articleDisplayFolderSort">Oui <input type="radio" value="0" name="articleDisplayFolderSort">Non</p>
 					<p>Affichage du lien direct de l'article: <input type="radio" checked="checked" value="1" name="articleDisplayLink">Oui <input type="radio" value="0" name="articleDisplayLink">Non</p>
 					<p>Affichage de la date de l'article: <input type="radio" checked="checked" value="1" name="articleDisplayDate">Oui <input type="radio" value="0" name="articleDisplayDate">Non</p>
 					<p>Affichage de l'auteur de l'article: <input type="radio" checked="checked" value="1" name="articleDisplayAuthor">Oui <input type="radio" value="0" name="articleDisplayAuthor">Non</p>
@@ -279,17 +318,12 @@ if(isset($_['installButton'])){
 					<p>Type d'affichage du contenu: <input type="radio" checked="checked" value="partial" name="articleView">Partiel <input type="radio" value="complete" name="articleView">Complet</p>
 					<h3 class="articleDetails">Nb: si vous choissisez un affichage partiel des articles, un click sur ces derniers menera à l'article sur le blog de l'auteur.</h3>
 					<p>Catégorie par defaut: <input type="text" value="Géneral" name="category"></p>
-					<p>Conserver les <input type="text" value="30" name="feedMaxEvents"> derniers événement d'un flux</p>
-					<h3 class="articleDetails">Nb: Plus il y aura d'événements à conserver, plus votre base de données sera importante. Nous vous conseillons de garder les 50 derniers événements au maximum pour conserver une performance correcte.<br>Notez que vos événements marqués comme favoris ne seront jamais supprimés</h3>
+					<p>Conserver les <input type="text" value="300" name="feedMaxEvents"> derniers événement d'un flux</p>
+					<h3 class="articleDetails">Nb: Plus il y aura d'événements à conserver, plus votre base de données sera importante. Nous vous conseillons de garder les 50 derniers événements au maximum pour conserver une performance correcte.<br>Notez que vos événements marqués comme favoris ne seront jamais supprimés.</h3>
 					
 				</section>
 
-				<section>
-					<h2>Options</h2>
-					<p><input onchange="$('.shaarliBlock').slideToggle(200);" type="checkbox" name="plugin_shaarli"> Activer le partage direct avec <a target="_blank" href="http://sebsauvage.net/wiki/doku.php?id=php:shaarli">shaarli<a></p>
-					<p class="shaarliBlock" style="display:none;">Lien vers votre shaarli: <input style="width:100%;" type="text" placeholder="http://mon.domaine.com/shaarli/" name="plugin_shaarli_link"></p>
-					<h3 class="articleDetails">Nb: cette option affichera un bouton à coté de chaque news pour vous proposer de la partager/stocker sur le gestionnaire de liens shaarli.</h3>
-				</section>
+	
 
 
 				<button name="installButton">Lancer l'installation</button>
@@ -309,6 +343,7 @@ if(isset($_['installButton'])){
 			<p>Leed "Light Feed" by <a target="_blank" href="http://blog.idleman.fr">Idleman</a></p>
 		</footer>
 	</div>
+</div>
 
 <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
 <script>window.jQuery || document.write('<script src="js/libs/jquery-1.7.2.min.js"><\/script>')</script>

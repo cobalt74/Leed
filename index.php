@@ -8,13 +8,14 @@
 
 require_once('header.php'); 
 
+
+Plugin::callHook("index_pre_treatment", array(&$_));
+
 //Récuperation de l'action (affichage) demandée
 $action = (isset($_['action'])?$_['action']:'');
 $tpl->assign('action',$action);
 //Récuperation des dossiers de flux par ordre de nom
 $tpl->assign('folders',$folderManager->populate('name'));
-//Récuperation du chemin vers shaarli si le plugin shaarli est activé
-$tpl->assign('shareOption',($configurationManager->get('plugin_shaarli')=='1'?$configurationManager->get('plugin_shaarli_link'):false));  
 //Recuperation de tous les non Lu
 $tpl->assign('unread',$feedManager->countUnreadEvents());
 //recuperation de tous les flux
@@ -32,13 +33,17 @@ $articlePerPages = $configurationManager->get('articlePerPages');
 $articleDisplayLink = $configurationManager->get('articleDisplayLink');
 $articleDisplayDate = $configurationManager->get('articleDisplayDate');
 $articleDisplayAuthor = $configurationManager->get('articleDisplayAuthor');
- 
+$articleDisplayHomeSort = $configurationManager->get('articleDisplayHomeSort');
+$articleDisplayFolderSort = $configurationManager->get('articleDisplayFolderSort');
+
 $tpl->assign('articleDisplayContent',$configurationManager->get('articleDisplayContent'));
 $tpl->assign('articleView',$configurationManager->get('articleView'));
 $tpl->assign('articlePerPages',$configurationManager->get('articlePerPages'));
 $tpl->assign('articleDisplayLink',$configurationManager->get('articleDisplayLink'));
 $tpl->assign('articleDisplayDate',$configurationManager->get('articleDisplayDate'));
 $tpl->assign('articleDisplayAuthor',$configurationManager->get('articleDisplayAuthor'));
+$tpl->assign('articleDisplayHomeSort',$configurationManager->get('articleDisplayHomeSort'));
+$tpl->assign('articleDisplayFolderSort',$configurationManager->get('articleDisplayFolderSort'));
 
 $target = MYSQL_PREFIX.'event.title,'.MYSQL_PREFIX.'event.unread,'.MYSQL_PREFIX.'event.favorite,'.MYSQL_PREFIX.'event.feed,';
 if($articleDisplayContent && $articleView=='partial') $target .= MYSQL_PREFIX.'event.description,';
@@ -66,17 +71,8 @@ $pagesArray = array();
 						$pages = ceil($numberOfItem/$articlePerPages); 
 						$startArticle = ($page-1)*$articlePerPages;
 						$events = $currentFeed->getEvents($startArticle,$articlePerPages,$order,$target);
-						$tpl->assign('pages',$pages);
-						$tpl->assign('page',$page);
-
-						for($i=($page-PAGINATION_SCALE<0?1:$page-PAGINATION_SCALE);$i<($page+PAGINATION_SCALE>$pages+1?$pages+1:$page+PAGINATION_SCALE);$i++){
-							$pagesArray[]=$i;
-						}
 
 						$tpl->assign('order',(isset($_['order'])?$_['order']:''));
-						$tpl->assign('pagesArray',$pagesArray);
-						$tpl->assign('previousPages',($page-PAGINATION_SCALE<0?-1:$page-PAGINATION_SCALE));
-						$tpl->assign('nextPages',($page+PAGINATION_SCALE>$pages+1?-1:$page+PAGINATION_SCALE));
 
 					break;
 					/* AFFICHAGE DES EVENEMENTS D'UN DOSSIER EN PARTICULIER */
@@ -87,16 +83,9 @@ $pagesArray = array();
 						$page = (isset($_['page'])?$_['page']:1);
 						$pages = ceil($numberOfItem/$articlePerPages); 
 						$startArticle = ($page-1)*$articlePerPages;
-						$events = $currentFolder->getEvents($startArticle,$articlePerPages,MYSQL_PREFIX.'event.pubdate DESC',$target);
-						$tpl->assign('pages',$pages);
-						$tpl->assign('page',$page);
-						for($i=($page-PAGINATION_SCALE<0?1:$page-PAGINATION_SCALE);$i<($page+PAGINATION_SCALE>$pages+1?$pages+1:$page+PAGINATION_SCALE);$i++){
-							$pagesArray[]=$i;
-						}
+						if($articleDisplayFolderSort) {$order = MYSQL_PREFIX.'event.pubdate desc';} else {$order = MYSQL_PREFIX.'event.pubdate asc';}
+						$events = $currentFolder->getEvents($startArticle,$articlePerPages,$order,$target);
 
-						$tpl->assign('pagesArray',$pagesArray);
-						$tpl->assign('previousPages',($page-PAGINATION_SCALE<0?-1:$page-PAGINATION_SCALE));
-						$tpl->assign('nextPages',($page+PAGINATION_SCALE>$pages+1?-1:$page+PAGINATION_SCALE));
 
 					break;
 					/* AFFICHAGE DES EVENEMENTS FAVORIS */
@@ -107,15 +96,7 @@ $pagesArray = array();
 						$startArticle = ($page-1)*$articlePerPages;
 						$events = $eventManager->loadAllOnlyColumn($target,array('favorite'=>1),'pubDate DESC',$startArticle.','.$articlePerPages);
 						$tpl->assign('numberOfItem',$numberOfItem);
-						$tpl->assign('pages',$pages);
-						$tpl->assign('page',$page);
-						for($i=($page-PAGINATION_SCALE<0?1:$page-PAGINATION_SCALE);$i<($page+PAGINATION_SCALE>$pages+1?$pages+1:$page+PAGINATION_SCALE);$i++){
-							$pagesArray[]=$i;
-						}
 
-						$tpl->assign('pagesArray',$pagesArray);
-						$tpl->assign('previousPages',($page-PAGINATION_SCALE<0?-1:$page-PAGINATION_SCALE));
-						$tpl->assign('nextPages',($page+PAGINATION_SCALE>$pages+1?-1:$page+PAGINATION_SCALE));
 
 					break;
 
@@ -126,24 +107,24 @@ $pagesArray = array();
 						$page = (isset($_['page'])?$_['page']:1);
 						$pages = ceil($numberOfItem/$articlePerPages); 
 						$startArticle = ($page-1)*$articlePerPages;
-						$events = $eventManager->loadAllOnlyColumn($target,array('unread'=>1),'pubDate DESC',$startArticle.','.$articlePerPages);
+						if($articleDisplayHomeSort) {$order = 'pubdate desc';} else {$order = 'pubdate asc';}
+						$events = $eventManager->loadAllOnlyColumn($target,array('unread'=>1),$order,$startArticle.','.$articlePerPages);
 						$tpl->assign('numberOfItem',$numberOfItem);
-						$tpl->assign('pages',$pages);
-						$tpl->assign('page',$page);
-
-
-
-						for($i=($page-PAGINATION_SCALE<0?1:$page-PAGINATION_SCALE);$i<($page+PAGINATION_SCALE>$pages+1?$pages+1:$page+PAGINATION_SCALE);$i++){
-							$pagesArray[]=$i;
-						}
-
-						$tpl->assign('pagesArray',$pagesArray);
-						$tpl->assign('previousPages',($page-PAGINATION_SCALE<0?-1:$page-PAGINATION_SCALE));
-						$tpl->assign('nextPages',($page+PAGINATION_SCALE>$pages+1?-1:$page+PAGINATION_SCALE));
 
 					break;
 				}
+				$tpl->assign('pages',$pages);
+				$tpl->assign('page',$page);
 
+				for($i=($page-PAGINATION_SCALE<=0?1:$page-PAGINATION_SCALE);$i<($page+PAGINATION_SCALE>$pages+1?$pages+1:$page+PAGINATION_SCALE);$i++){
+					$pagesArray[]=$i;
+				}
+				$tpl->assign('pagesArray',$pagesArray);
+				$tpl->assign('previousPages',($page-PAGINATION_SCALE<0?-1:$page-PAGINATION_SCALE-1));
+				$tpl->assign('nextPages',($page+PAGINATION_SCALE>$pages+1?-1:$page+PAGINATION_SCALE));
+
+
+				Plugin::callHook("index_post_treatment", array(&$events));
 				$tpl->assign('events',$events);
 				$tpl->assign('time',$_SERVER['REQUEST_TIME']);
 				$tpl->assign('hightlighted',0);

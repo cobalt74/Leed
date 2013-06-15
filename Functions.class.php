@@ -143,15 +143,14 @@ class Functions
 	 * @return<String> chaine tronquée
 	 */
 	public static function truncate($msg,$limit){
-		$msg = utf8_encode(html_entity_decode($msg));
-		if(strlen($msg)>$limit){
-			$nb=$limit-3 ;
-			$fin='...' ;
+		if(mb_strlen($msg)>$limit){
+			$fin='…' ;
+			$nb=$limit-mb_strlen($fin) ;
 		}else{
-			$nb=strlen($msg);
+			$nb=mb_strlen($msg);
 			$fin='';
 		}
-		return substr($msg, 0, $nb).$fin;
+		return mb_substr($msg, 0, $nb).$fin;
 	}
 
 
@@ -247,7 +246,7 @@ class Functions
 		unset($_COOKIE[$name]);
 	}
 
-	static function wordwrap($str, $width = 75, $break = "\n", $cut = false)
+	public static function wordwrap($str, $width = 75, $break = "\n", $cut = false)
 	{
 		$str = html_entity_decode($str);
 		$str =  htmlentities (wordwrap($str,$width,$break,$cut));
@@ -299,12 +298,62 @@ class Functions
 		return $allFiles;
 	}
 
-		function stripAccents($string){
-			return strtr(html_entity_decode($string),'àáâãäçèéêëìíîïñòóôõöùúûüýÿÀÁÂÃÄÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝ',
-		'aaaaaceeeeiiiinooooouuuuyyAAAAACEEEEIIIINOOOOOUUUUY');
+	/** Permet la sortie directe de texte à l'écran, sans tampon.
+		Source : http://php.net/manual/fr/function.flush.php
+	*/
+	public static function triggerDirectOutput() {
+		// La ligne de commande n'en a pas besoin.
+		if ('cli'==php_sapi_name()) return;
+		if (function_exists('apache_setenv')) {
+			/* Selon l'hébergeur la fonction peut être désactivée. Alors Php
+			   arrête le programme avec l'erreur :
+			   "PHP Fatal error:  Call to undefined function apache_setenv()".
+			*/
+			@apache_setenv('no-gzip', 1);
 		}
+		@ini_set('zlib.output_compression', 0);
+		@ini_set('implicit_flush', 1);
+		for ($i = 0; $i < ob_get_level(); $i++) { ob_end_flush(); }
+		ob_implicit_flush(1);
+	}
+
+	public static function relativePath($from, $to, $ps = '/') {
+		$arFrom = explode($ps, rtrim($from, $ps));
+		$arTo = explode($ps, rtrim($to, $ps));
+		while(count($arFrom) && count($arTo) && ($arFrom[0] == $arTo[0])) {
+			array_shift($arFrom);
+			array_shift($arTo);
+		}
+		return str_pad("", count($arFrom) * 3, '..'.$ps).implode($ps, $arTo);
+	}
+	
+
+	// Nettoyage de l'url avant la mise en base
+	public static function clean_url( $url ) {
+		$url = str_replace('&amp;', '&', $url);
+		return $url;
+	}
 
 
 
+	/**
+	* Méthode de test de connexion.
+	* @return true si ok
+	* @param server
+	* @param login
+	* @param pass
+	* @param db facultatif, si précisé alors tente de la séléctionner
+	*/
+	public static function testDb($server, $login, $pass, $db=null) {
+		/* Méthode hors des classes dédiées aux BDD afin de supporter le moins
+		   de dépendances possibles. En particulier, pas besoin que le fichier
+		   de configuration existe. */
+		$link = mysql_connect($server, $login, $pass);
+		if (false===$link) return false;
+		if (!is_null($db) && false===mysql_select_db($db, $link)) return false;
+		mysql_close($link);
+		return true;
+	}
+		
 }
 ?>
