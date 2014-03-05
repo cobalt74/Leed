@@ -1,3 +1,6 @@
 /cache/
 /constant.php
 /logs/
+/plugins/
+update.json
+*.log
