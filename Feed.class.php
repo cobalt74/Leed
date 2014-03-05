@@ -8,7 +8,7 @@
 
 class Feed extends MysqlEntity{
 
-    protected $id,$name,$url,$events=array(),$description,$website,$folder,$lastupdate,$isverbose;
+    protected $id,$name,$url,$events=array(),$description,$website,$folder,$lastupdate,$isverbose,$lastSyncInError;
     protected $TABLE_NAME = 'feed';
     protected $CLASS_NAME = 'Feed';
     protected $object_fields =
@@ -21,6 +21,7 @@ class Feed extends MysqlEntity{
         'lastupdate'=>'string',
         'folder'=>'integer',
         'isverbose'=>'boolean',
+        'lastSyncInError'=>'boolean',
     );
 
     protected $object_fields_index =
@@ -45,13 +46,14 @@ class Feed extends MysqlEntity{
     function getInfos(){
         $xml = @simplexml_load_file($this->url);
         if($xml!=false){
-            $this->name = array_shift ($xml->xpath('channel/title'));
-            $this->description = array_shift ($xml->xpath('channel/description'));
-            $this->website = array_shift ($xml->xpath('channel/link'));
+            $n = $xml->xpath('channel/title'); $this->name = $n[0];
+            $d = $xml->xpath('channel/description'); $this->description = $d[0];
+            $w = $xml->xpath('channel/link'); $this->website = $w[0];
         }
     }
 
     function getError() { return $this->error; }
+    function getLastSyncInError() { return $this->lastSyncInError; }
 
     /*@TODO: fournir un extrait quand il 'y a pas de description. De même pour les médias.
     @TODO: SimplePie remplace "é" par "&eacute;", il ne devrait pas le faire.
@@ -79,8 +81,10 @@ class Feed extends MysqlEntity{
         $feed->force_feed($forceFeed);
         $feed->set_feed_url($this->url);
         $feed->set_useragent('Mozilla/4.0 Leed (LightFeed Agrgegator) '.VERSION_NAME.' by idleman http://projet.idleman.fr/leed');
+        $this->lastSyncInError = 0;
         if (!$feed->init()) {
             $this->error = $feed->error;
+            $this->lastSyncInError = 1;
             $this->lastupdate = $_SERVER['REQUEST_TIME'];
             $this->save();
             return false;
@@ -244,9 +248,12 @@ class Feed extends MysqlEntity{
         $prefixTable = $this->getPrefixTable();
         $results = Feed::customQuery("SELECT COUNT(".$prefixTable."event.id), ".$prefixTable."event.feed FROM ".$prefixTable."event WHERE ".$prefixTable."event.unread = 1 GROUP BY ".$prefixTable."event.feed") ;
         if($results!=false){
+            $total = 0;
             while($item = mysql_fetch_array($results)){
                 $unreads[$item[1]] = $item[0];
+                $total += $item[0];
             }
+            $unreads['total'] = $total;
         }
         return $unreads;
     }

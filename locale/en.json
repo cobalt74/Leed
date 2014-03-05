@@ -176,6 +176,7 @@
  "SYNCHRONISATION":"Synchronization",
  "SYNCHRONISATION_CODE":"Synchronization code",
  "SYNCHRONISATION_COMPLETE":"Synchronization finished.",
+ "SYNCHRONISATION_ERROR":"Error of the last synchronization",
  "SYNCHRONISATION_OPTION":"Synchronization options",
  "SYNCHRONISATION_TYPE":"Synchronization type",
  "SYNCHRONIZE_COFFEE_TIME":"NB : The synchronization can take time, leave your browser do the job and go grab a coffee :).",

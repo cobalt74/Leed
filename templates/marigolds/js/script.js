@@ -150,7 +150,9 @@ function scrollInfini() {
         if ($(window).data('ajaxready') == false) return;
 
         if(($(window).scrollTop() + $(window).height()) + 50 >= $(document).height()
-           || agentID && ($(window).scrollTop() + $(window).height()) + 150 > $(document).height())
+           || agentID && ($(window).scrollTop() + $(window).height()) + 150 > $(document).height()
+           || $('article').position().top + $('article').height() < $('aside').height()
+           )
         {
             // lorsqu'on commence un traitement, on met ajaxready à false
             $(window).data('ajaxready', false);
@@ -422,6 +424,24 @@ function readThis(element,id,from,callback){
     var nextEvent = $('#'+id).next();
     //sur les éléments non lus
     if(!parent.hasClass('eventRead')){
+        switch (activeScreen){
+            case '':
+                // cas de la page d'accueil
+                parent.addClass('eventRead');
+                parent.fadeOut(200,function(){
+                    if(callback){
+                        callback();
+                    }else{
+                        targetThisEvent(nextEvent,true);
+                    }
+                    // on simule un scroll si tous les events sont cachés
+                    if($('article section:last').attr('style')=='display: none;') {
+                        $(window).scrollTop($(document).height());
+                    }
+                });
+                // on diminue le nombre d'article en haut de page
+                $('#nbarticle').html(parseInt($('#nbarticle').html()) - 1)
+        }
         $.ajax({
             url: "./action.php?action=readContent",
             data:{id:id},
@@ -432,23 +452,8 @@ function readThis(element,id,from,callback){
                     if( console && console.log && msg!="" ) console.log(msg);
                     switch (activeScreen){
                         case '':
-                            // cas de la page d'accueil
-                            parent.addClass('eventRead');
-                            parent.fadeOut(200,function(){
-                                if(callback){
-                                    callback();
-                                }else{
-                                    targetThisEvent(nextEvent,true);
-                                }
-                                // on simule un scroll si tous les events sont cachés
-                                if($('article section:last').attr('style')=='display: none;') {
-                                    $(window).scrollTop($(document).height());
-                                }
-                            });
                             // on compte combien d'article ont été lus afin de les soustraires de la requête pour le scroll infini
                             $(window).data('nblus', $(window).data('nblus')+1);
-                            // on diminue le nombre d'article en haut de page
-                            $('#nbarticle').html(parseInt($('#nbarticle').html()) - 1)
                         break;
                         case 'selectedFolder':
                         case 'selectedFeedNonLu':
