@@ -1,4 +1,4 @@
-<?php 
+<?php
 
 /*
  @nom: article
@@ -16,21 +16,19 @@ $allFeeds = $feedManager->getFeedsPerFolder();
 $tpl->assign('allFeeds',$allFeeds);
 $tpl->assign('scrollpage',$_['scroll']);
 // récupération des variables pour l'affichage
-$articleDisplayContent = $configurationManager->get('articleDisplayContent');
-$articleView = $configurationManager->get('articleView');
 $articlePerPages = $configurationManager->get('articlePerPages');
 $articleDisplayLink = $configurationManager->get('articleDisplayLink');
 $articleDisplayDate = $configurationManager->get('articleDisplayDate');
 $articleDisplayAuthor = $configurationManager->get('articleDisplayAuthor');
 $articleDisplayHomeSort = $configurationManager->get('articleDisplayHomeSort');
 $articleDisplayFolderSort = $configurationManager->get('articleDisplayFolderSort');
+$articleDisplayMode = $configurationManager->get('articleDisplayMode');
 $optionFeedIsVerbose = $configurationManager->get('optionFeedIsVerbose');
 
-$tpl->assign('articleView',$articleView);
-$tpl->assign('articleDisplayLink',$articleDisplayLink);
-$tpl->assign('articleDisplayDate',$articleDisplayDate);
 $tpl->assign('articleDisplayAuthor',$articleDisplayAuthor);
-$tpl->assign('articleDisplayContent',$articleDisplayContent);
+$tpl->assign('articleDisplayDate',$articleDisplayDate);
+$tpl->assign('articleDisplayLink',$articleDisplayLink);
+$tpl->assign('articleDisplayMode',$articleDisplayMode);
 
 
 $hightlighted = $_['hightlighted'];
@@ -40,8 +38,8 @@ $tpl->assign('time',$_SERVER['REQUEST_TIME']);
 
 $prefix=$eventManager->getPrefixTable();
 $target = $prefix.'event.title,'.$prefix.'event.unread,'.$prefix.'event.favorite,'.$prefix.'event.feed,';
-if($articleDisplayContent && $articleView=='partial') $target .= $prefix.'event.description,';
-if($articleDisplayContent && $articleView!='partial') $target .= $prefix.'event.content,';
+if($articleDisplayMode=='summary') $target .= $prefix.'event.description,';
+if($articleDisplayMode=='content') $target .= $prefix.'event.content,';
 if($articleDisplayLink) $target .= $prefix.'event.link,';
 if($articleDisplayDate) $target .= $prefix.'event.pubdate,';
 if($articleDisplayAuthor) $target .= $prefix.'event.creator,';

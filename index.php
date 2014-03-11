@@ -29,34 +29,32 @@ $tpl->assign('allEvents',$eventManager->getEventCountPerFolder());
 $feedState = new Feed();
 $tpl->assign('feedState',$feedState);
 
-$articleDisplayContent = $configurationManager->get('articleDisplayContent');
-$articleView = $configurationManager->get('articleView');
-$articlePerPages = $configurationManager->get('articlePerPages');
-$articleDisplayLink = $configurationManager->get('articleDisplayLink');
-$articleDisplayDate = $configurationManager->get('articleDisplayDate');
 $articleDisplayAuthor = $configurationManager->get('articleDisplayAuthor');
-$articleDisplayHomeSort = $configurationManager->get('articleDisplayHomeSort');
+$articleDisplayDate = $configurationManager->get('articleDisplayDate');
 $articleDisplayFolderSort = $configurationManager->get('articleDisplayFolderSort');
+$articleDisplayHomeSort = $configurationManager->get('articleDisplayHomeSort');
+$articleDisplayLink = $configurationManager->get('articleDisplayLink');
+$articleDisplayMode = $configurationManager->get('articleDisplayMode');
+$articlePerPages = $configurationManager->get('articlePerPages');
 $displayOnlyUnreadFeedFolder = $configurationManager->get('displayOnlyUnreadFeedFolder');
 if (!isset($displayOnlyUnreadFeedFolder)) $displayOnlyUnreadFeedFolder=false;
 ($displayOnlyUnreadFeedFolder=='true')?$displayOnlyUnreadFeedFolder_reverse='false':$displayOnlyUnreadFeedFolder_reverse='true';
 $optionFeedIsVerbose = $configurationManager->get('optionFeedIsVerbose');
 
-$tpl->assign('articleDisplayContent',$configurationManager->get('articleDisplayContent'));
-$tpl->assign('articleView',$configurationManager->get('articleView'));
-$tpl->assign('articlePerPages',$configurationManager->get('articlePerPages'));
-$tpl->assign('articleDisplayLink',$configurationManager->get('articleDisplayLink'));
-$tpl->assign('articleDisplayDate',$configurationManager->get('articleDisplayDate'));
-$tpl->assign('articleDisplayAuthor',$configurationManager->get('articleDisplayAuthor'));
-$tpl->assign('articleDisplayHomeSort',$configurationManager->get('articleDisplayHomeSort'));
-$tpl->assign('articleDisplayFolderSort',$configurationManager->get('articleDisplayFolderSort'));
+$tpl->assign('articleDisplayAuthor',$articleDisplayAuthor);
+$tpl->assign('articleDisplayDate',$articleDisplayDate);
+$tpl->assign('articleDisplayFolderSort',$articleDisplayFolderSort);
+$tpl->assign('articleDisplayHomeSort',$articleDisplayHomeSort);
+$tpl->assign('articleDisplayLink',$articleDisplayLink);
+$tpl->assign('articleDisplayMode',$articleDisplayMode);
+$tpl->assign('articlePerPages',$articlePerPages);
 $tpl->assign('displayOnlyUnreadFeedFolder',$displayOnlyUnreadFeedFolder);
 $tpl->assign('displayOnlyUnreadFeedFolder_reverse',$displayOnlyUnreadFeedFolder_reverse);
 
 $prefix=$eventManager->getPrefixTable();
 $target = $prefix.'event.title,'.$prefix.'event.unread,'.$prefix.'event.favorite,'.$prefix.'event.feed,';
-if($articleDisplayContent && $articleView=='partial') $target .= $prefix.'event.description,';
-if($articleDisplayContent && $articleView!='partial') $target .= $prefix.'event.content,';
+if($articleDisplayMode=='summary')  $target .= $prefix.'event.description,';
+if($articleDisplayMode=='content')  $target .= $prefix.'event.content,';
 if($articleDisplayLink) $target .= $prefix.'event.link,';
 if($articleDisplayDate) $target .= $prefix.'event.pubdate,';
 if($articleDisplayAuthor) $target .= $prefix.'event.creator,';
@@ -105,7 +103,7 @@ switch($action){
         $page = (isset($_['page'])?$_['page']:1);
         $pages = ceil($numberOfItem/$articlePerPages);
         $startArticle = ($page-1)*$articlePerPages;
-        if($articleDisplayFolderSort) {$order = $prefix.'event.pubdate desc';} else {$order = $prefix.'event.pubdate asc';}
+        if($articleDisplayFolderSort) {$order = MYSQL_PREFIX.'event.pubdate desc';} else {$order = MYSQL_PREFIX.'event.pubdate asc';}
         $events = $currentFolder->getEvents($startArticle,$articlePerPages,$order,$target);
 
 
