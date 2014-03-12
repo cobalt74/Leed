@@ -83,16 +83,21 @@ class Update{
                 foreach ($sql_array as $val) {
                     $val = preg_replace('#([-].*)|(\n)#','',$val);
                     if ($val != '') {
-                        //remplacement des préfixes de table
-                        $val = str_replace('##MYSQL_PREFIX##',MYSQL_PREFIX,$val);
-                        $result = mysql_query($val);
-                        $ficlog = dirname(__FILE__).Update::FOLDER.'/'.substr($file,0,strlen($file)-3).'log';
-                        if (false===$result) {
-                            file_put_contents($ficlog, date('d/m/Y H:i:s').' : SQL : '.$val."\n", FILE_APPEND);
-                            file_put_contents($ficlog, date('d/m/Y H:i:s').' : '.mysql_error()."\n", FILE_APPEND);
-                        } else {
-                            file_put_contents($ficlog, date('d/m/Y H:i:s').' : SQL : '.$val."\n", FILE_APPEND);
-                            file_put_contents($ficlog, date('d/m/Y H:i:s').' : '.mysql_affected_rows().' rows affected'."\n", FILE_APPEND);
+                        $sql = 'SELECT prefixDatabase FROM '.MYSQL_PREFIX.'user';
+                        $environnements = $conn->customQuery($sql);
+                        while($env = mysql_fetch_array($environnements)){
+                            //remplacement des préfixes de table
+                            $value = str_replace('##MYSQL_PREFIX##',$env[0],$val);
+                            error_log($value);
+                            $result = mysql_query($val);
+                            $ficlog = dirname(__FILE__).Update::FOLDER.'/'.substr($file,0,strlen($file)-3).'log';
+                            if (false===$result) {
+                                file_put_contents($ficlog, date('d/m/Y H:i:s').' : SQL : '.$val."\n", FILE_APPEND);
+                                file_put_contents($ficlog, date('d/m/Y H:i:s').' : '.mysql_error()."\n", FILE_APPEND);
+                            } else {
+                                file_put_contents($ficlog, date('d/m/Y H:i:s').' : SQL : '.$val."\n", FILE_APPEND);
+                                file_put_contents($ficlog, date('d/m/Y H:i:s').' : '.mysql_affected_rows().' rows affected'."\n", FILE_APPEND);
+                            }
                         }
                     }
                 }
@@ -107,7 +112,6 @@ class Update{
 
         return true;
     }
-
 }
 
 ?>
