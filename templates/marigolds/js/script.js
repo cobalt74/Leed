@@ -482,6 +482,7 @@ function readThis(element,id,from,callback){
     }else{  // sur les éléments lus
             // si ce n'est pas un clic sur le titre de l'event
         if(from!='title'){
+            addOrRemoveFeedNumber('+');
             $.ajax({
                     url: "./action.php?action=unreadContent",
                     data:{id:id},
@@ -746,9 +747,9 @@ function addOrRemoveFeedNumber(operator){
         var regex='[0-9]+';
         var found = feed_folder.html().match(regex);
         nb = parseInt(found[0])-1;
-        var regex2='[a-zA-Z ]+';
+        var regex2='[^0-9]+';
         var lib = feed_folder.html().match(regex2);
-        feed_folder.html(nb + ' ' +lib[0])
+        feed_folder.html(nb +lib[0])
     } else {
         // on augmente le nombre d'article en haut de page
         var nb = parseInt($('#nbarticle').html()) + 1;
@@ -763,8 +764,8 @@ function addOrRemoveFeedNumber(operator){
         var regex='[0-9]+';
         var found = feed_folder.html().match(regex);
         nb = parseInt(found[0])+1;
-        var regex2='[a-zA-Z ]+';
+        var regex2='[^0-9]+';
         var lib = feed_folder.html().match(regex2);
-        feed_folder.html(nb + ' ' +lib[0])
+        feed_folder.html(nb +lib[0])
     }
 }
