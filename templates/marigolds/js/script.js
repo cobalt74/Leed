@@ -424,23 +424,6 @@ function readThis(element,id,from,callback){
     var nextEvent = $('#'+id).next();
     //sur les éléments non lus
     if(!parent.hasClass('eventRead')){
-        switch (activeScreen){
-            case '':
-                // cas de la page d'accueil
-                parent.addClass('eventRead');
-                parent.fadeOut(200,function(){
-                    if(callback){
-                        callback();
-                    }else{
-                        targetThisEvent(nextEvent,true);
-                    }
-                    // on simule un scroll si tous les events sont cachés
-                    if($('article section:last').attr('style')=='display: none;') {
-                        $(window).scrollTop($(document).height());
-                    }
-                });
-            break;
-        }
         addOrRemoveFeedNumber('-');
         $.ajax({
             url: "./action.php?action=readContent",
@@ -452,6 +435,19 @@ function readThis(element,id,from,callback){
                     if( console && console.log && msg!="" ) console.log(msg);
                     switch (activeScreen){
                         case '':
+                            // cas de la page d'accueil
+                            parent.addClass('eventRead');
+                            parent.fadeOut(200,function(){
+                                if(callback){
+                                    callback();
+                                }else{
+                                    targetThisEvent(nextEvent,true);
+                                }
+                                // on simule un scroll si tous les events sont cachés
+                                if($('article section:last').attr('style')=='display: none;') {
+                                    $(window).scrollTop($(document).height());
+                                }
+                            });
                             // on compte combien d'article ont été lus afin de les soustraires de la requête pour le scroll infini
                             $(window).data('nblus', $(window).data('nblus')+1);
                         break;
@@ -744,12 +740,18 @@ function addOrRemoveFeedNumber(operator){
         }
         // on diminue le nombre sur le dossier
         var feed_folder = ($(feed).closest('ul').prev('h1').find('.unreadForFolder'));
-        var regex='[0-9]+';
-        var found = feed_folder.html().match(regex);
-        nb = parseInt(found[0])-1;
-        var regex2='[^0-9]+';
-        var lib = feed_folder.html().match(regex2);
-        feed_folder.html(nb +lib[0])
+        if(isNaN(feed_folder.html())) {
+            var regex='[0-9]+';
+            var found = feed_folder.html().match(regex);
+            nb = parseInt(found[0])-1;
+            var regex2='[^0-9]+';
+            var lib = feed_folder.html().match(regex2);
+            if (nb > 0) {
+                feed_folder.html(nb +lib[0])
+            } else {
+                feed_folder.html('0' +lib[0])
+            }
+        }
     } else {
         // on augmente le nombre d'article en haut de page
         var nb = parseInt($('#nbarticle').html()) + 1;
@@ -761,11 +763,17 @@ function addOrRemoveFeedNumber(operator){
         $(feed).text(nb);
         // on augmente le nombre sur le dossier
         var feed_folder = ($(feed).closest('ul').prev('h1').find('.unreadForFolder'));
-        var regex='[0-9]+';
-        var found = feed_folder.html().match(regex);
-        nb = parseInt(found[0])+1;
-        var regex2='[^0-9]+';
-        var lib = feed_folder.html().match(regex2);
-        feed_folder.html(nb +lib[0])
+        if(isNaN(feed_folder.html())) {
+            var regex='[0-9]+';
+            var found = feed_folder.html().match(regex);
+            nb = parseInt(found[0])+1;
+            var regex2='[^0-9]+';
+            var lib = feed_folder.html().match(regex2);
+            if (nb > 0) {
+                feed_folder.html(nb +lib[0])
+            } else {
+                feed_folder.html('0' +lib[0])
+            }
+        }
     }
 }

@@ -20,7 +20,7 @@ class Plugin{
         if(is_array($pluginFiles)) {
             foreach($pluginFiles as $pluginFile) {
                 // Chargement du fichier de Langue du plugin
-                $i18n->append(new Translation(dirname($pluginFile)));
+                $i18n->append(new Translation(dirname($pluginFile),LANGUAGE));
                 // Inclusion du coeur de plugin
                 include $pluginFile;
                 // Gestion des css du plugin en fonction du thème actif
@@ -29,7 +29,7 @@ class Plugin{
                 if(isset($cssTheme[0])){
                     $GLOBALS['hooks']['css_files'][] = Functions::relativePath(str_replace('\\','/',dirname(__FILE__)),str_replace('\\','/',$cssTheme[0]));
                 }else if(isset($cssDefault[0])){
-                    $GLOBALS['hooks']['css_files'][] =  Functions::relativePath(str_replace('\\','/',dirname(__FILE__)),str_replace('\\','/',$cssDefault[0]));
+                    $GLOBALS['hooks']['css_files'][] = Functions::relativePath(str_replace('\\','/',dirname(__FILE__)),str_replace('\\','/',$cssDefault[0]));
                 }
             }
         }
@@ -154,15 +154,15 @@ class Plugin{
         return $return;
     }
 
-    public static function addLink($rel, $link) {
-        $GLOBALS['hooks']['head_link'][] = array("rel"=>$rel, "link"=>$link);
+    public static function addLink($rel, $link, $type='', $title='') {
+        $GLOBALS['hooks']['head_link'][] = array("rel"=>$rel, "link"=>$link, "type"=>$type, "title"=>$title);
     }
 
     public static function callLink(){
         $return='';
         if(isset($GLOBALS['hooks']['head_link'])) {
             foreach($GLOBALS['hooks']['head_link'] as $head_link) {
-                $return .='<link rel="'.$head_link['rel'].'" href="'.$head_link['link'].'" />'."\n";
+                $return .='<link rel="'.$head_link['rel'].'" href="'.$head_link['link'].'" type="'.$head_link['type'].'" title="'.$head_link['title'].'" />'."\n";
             }
         }
         return $return;
@@ -270,9 +270,13 @@ class Plugin{
 
 
     static function sortPlugin($a, $b){
-        if ($a->getName() == $b->getName())
-        return 0;
-        return ($a->getName() < $b->getName()) ? -1 : 1;
+        if ($a->getState() == $b->getState())
+            if ($a->getName() == $b->getName())
+                return 0;
+            else
+                return $a->getName() < $b->getName() ? -1 : 1;
+        else
+            return $a->getState() < $b->getState() ? -1 : 1;
     }
 
 
