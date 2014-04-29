@@ -623,6 +623,117 @@ switch ($action){
 
         break;
 
+    case 'addUser':
+        if($myUser==false) exit('Vous devez vous connecter pour cette action.');
+        if($myUser->getId()!=1) exit('Vous devez vous identifier en administrateur');
+
+        //vérifier que le login utilisateur n'est pas déjà utilisé
+        if(isset($_['login'])&&isset($_['password'])){
+            if (($_['login']!='')&&($_['password']!='')) {
+                $login = mysql_real_escape_string($_['login']);
+                $password = mysql_real_escape_string($_['password']);
+                $user = $userManager->load(array('login'=>$login));
+                if($user==false) {
+                    //Ajout d'un utilisateur avec prefixe de table fixe.
+                    $newUser = new User();
+                    $newUser->setLogin($login);
+                    $newUser->setPassword($password);
+                    $newUser->setPrefixDatabase(MYSQL_PREFIX.$login.'_');
+                    $newUser->save();
+                    //Identification temporaire de l'utilisateur en session afin d'effectuer les créations
+                    $admin = unserialize($_SESSION['currentUser']);
+                    $_SESSION['currentUser'] = serialize($newUser);
+
+                    //Création de la base et des tables
+                    $newFeed = new Feed();
+                    $newFeed->setPrefixTable(MYSQL_PREFIX.$login.'_');
+                    $newEvent = new Event();
+                    $newEvent->setPrefixTable(MYSQL_PREFIX.$login.'_');
+                    $newFolder = new Folder();
+                    $newFolder->setPrefixTable(MYSQL_PREFIX.$login.'_');
+                    $newConfiguration = new Configuration();
+                    $newConfiguration->setPrefixTable(MYSQL_PREFIX.$login.'_');
+
+                    $newFeed->create();
+                    $newEvent->create();
+                    $newFolder->create();
+                    $newConfiguration->create();
+
+                    //Ajout des préférences et reglages
+                    $synchronisationCode = substr(sha1(rand(0,30).time().rand(0,30)),0,10);
+
+                    $newConfiguration->add('root',$configurationManager->get('root'));
+                    $newConfiguration->add('articleView',$configurationManager->get('articleView'));
+                    $newConfiguration->add('articleDisplayContent',$configurationManager->get('articleDisplayContent'));
+                    $newConfiguration->add('articleDisplayAnonymous',$configurationManager->get('articleDisplayAnonymous'));
+                    $newConfiguration->add('articlePerPages',$configurationManager->get('articlePerPages'));
+                    $newConfiguration->add('articleDisplayLink',$configurationManager->get('articleDisplayLink'));
+                    $newConfiguration->add('articleDisplayDate',$configurationManager->get('articleDisplayDate'));
+                    $newConfiguration->add('articleDisplayAuthor',$configurationManager->get('articleDisplayAuthor'));
+                    $newConfiguration->add('articleDisplayHomeSort',$configurationManager->get('articleDisplayHomeSort'));
+                    $newConfiguration->add('articleDisplayFolderSort',$configurationManager->get('articleDisplayFolderSort'));
+                    $newConfiguration->add('synchronisationType',$configurationManager->get('synchronisationType'));
+                    $newConfiguration->add('feedMaxEvents',$configurationManager->get('feedMaxEvents'));
+                    $newConfiguration->add('synchronisationCode',$synchronisationCode);
+
+                    //Création du dossier de base
+                    $folder = $newFolder->load(array('id'=>1));
+                    $folder = (!$folder?new Folder():$folder);
+                    $folder->setName('Général');
+                    $folder->setParent(-1);
+                    $folder->setIsopen(1);
+                    $folder->save();
+
+                    $_SESSION['currentUser'] = serialize($admin);
+                } else {
+                    exit("erreur : le compte existe déjà");
+                }
+            } else {
+                exit("erreur : merci de saisir un login et mot de passe");
+            }
+        } else {
+            exit("erreur : nombre de variable incorrect");
+        }
+        header('location: ./settings.php#manageUsers');
+        break;
+
+    case 'delUser':
+        if($myUser==false) exit('Vous devez vous connecter pour cette action.');
+        if($myUser->getId()!=1) exit('Vous devez vous identifier en administrateur');
+
+        if(isset($_['id'])){
+            if($_['id']!=1){
+                //récupération du prefix
+                $myuser = new User();
+                $user = $myuser->load(array('id'=>$_['id']));
+                $prefix = $user->getPrefixDatabase();
+
+                //récupération des objets de l'utilisateur et drop des tables
+                $dropFeed = new Feed();
+                $dropFeed->setPrefixTable($prefix);
+                $dropFeed->destroy();
+                $dropEvent = new Event();
+                $dropEvent->setPrefixTable($prefix);
+                $dropEvent->destroy();
+                $dropFolder = new Folder();
+                $dropFolder->setPrefixTable($prefix);
+                $dropFolder->destroy();
+                $dropConfiguration = new Configuration();
+                $dropConfiguration->setPrefixTable($prefix);
+                $dropConfiguration->destroy();
+
+                //suppression de l'utilisateur
+                $userManager->delete(array('id'=>$_['id']));
+            } else {
+                exit("erreur : impossible de supprimer ladministrateur");
+            }
+        } else {
+            exit("erreur : nombre de variable incorrect");
+        }
+
+        header('location: ./settings.php#manageUsers');
+        break;
+
     default:
         require_once("SimplePie.class.php");
         Plugin::callHook("action_post_case", array(&$_,$myUser));
